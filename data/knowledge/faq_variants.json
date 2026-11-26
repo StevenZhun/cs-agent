@@ -1,0 +1,82 @@
+{
+  "account_access_01": {
+    "existing_count": 0,
+    "faq_group_id": "account_access",
+    "item_version": "faq-v1",
+    "review_status": "APPROVED",
+    "standard_question": "忘记登录密码怎么办？",
+    "variants": ["登录密码想不起来了", "忘记密码要怎么重置", "我没法用原密码登录"]
+  },
+  "account_access_02": {
+    "existing_count": 0,
+    "faq_group_id": "account_access",
+    "item_version": "faq-v1",
+    "review_status": "APPROVED",
+    "standard_question": "为什么多次登录失败后账号被锁定？",
+    "variants": ["登录错了几次账号就锁了", "账号为什么突然被锁定", "连续登录失败后怎么恢复"]
+  },
+  "service_channel_01": {
+    "existing_count": 0,
+    "faq_group_id": "service_channel",
+    "item_version": "faq-v1",
+    "review_status": "APPROVED",
+    "standard_question": "人工客服的服务时间是什么？",
+    "variants": ["人工客服几点上班", "什么时候能联系到人工", "人工服务时间怎么安排"]
+  },
+  "service_channel_02": {
+    "existing_count": 0,
+    "faq_group_id": "service_channel",
+    "item_version": "faq-v1",
+    "review_status": "APPROVED",
+    "standard_question": "在哪里查看服务请求的处理进度？",
+    "variants": ["怎么查看问题处理到哪了", "服务请求进度在哪里看", "我提交的问题有进展吗"]
+  },
+  "privacy_security_01": {
+    "existing_count": 0,
+    "faq_group_id": "privacy_security",
+    "item_version": "faq-v1",
+    "review_status": "APPROVED",
+    "standard_question": "客服会要求我提供验证码吗？",
+    "variants": ["客服能找我要验证码吗", "验证码可以发给客服吗", "有人让我提供验证码怎么办"]
+  },
+  "privacy_security_02": {
+    "existing_count": 0,
+    "faq_group_id": "privacy_security",
+    "item_version": "faq-v1",
+    "review_status": "APPROVED",
+    "standard_question": "收到陌生链接让我登录账号怎么办？",
+    "variants": ["陌生链接让我登录能点吗", "有人发链接让我输账号", "不认识的登录链接安全吗"]
+  },
+  "complaint_guidance_01": {
+    "existing_count": 0,
+    "faq_group_id": "complaint_guidance",
+    "item_version": "faq-v1",
+    "review_status": "APPROVED",
+    "standard_question": "如何提交服务投诉？",
+    "variants": ["我想投诉该怎么提交", "在哪里反馈服务问题", "怎么正式提交投诉"]
+  },
+  "complaint_guidance_02": {
+    "existing_count": 0,
+    "faq_group_id": "complaint_guidance",
+    "item_version": "faq-v1",
+    "review_status": "APPROVED",
+    "standard_question": "提交投诉后多久能处理完成？",
+    "variants": ["投诉一般多久处理", "反馈问题什么时候有结果", "投诉能当天处理完吗"]
+  },
+  "general_service_01": {
+    "existing_count": 0,
+    "faq_group_id": "general_service",
+    "item_version": "faq-v1",
+    "review_status": "APPROVED",
+    "standard_question": "如何确认我看到的是最新服务说明？",
+    "variants": ["怎么判断服务说明是不是最新的", "转发的说明还能用吗", "最新规则在哪里看"]
+  },
+  "general_service_02": {
+    "existing_count": 0,
+    "faq_group_id": "general_service",
+    "item_version": "faq-v1",
+    "review_status": "APPROVED",
+    "standard_question": "一个问题可以分多次补充吗？",
+    "variants": ["问题能不能之后继续补充", "我可以分几次说明吗", "同一件事还能接着补充吗"]
+  }
+}

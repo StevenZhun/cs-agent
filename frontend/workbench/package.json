@@ -1,0 +1,25 @@
+{
+  "name": "cs-agent-workbench",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "types:generate": "openapi-typescript openapi.json -o src/openapi.d.ts",
+    "format:check": "prettier --check src/*.vue src/api.ts src/style.css src/main.ts vite.config.ts tsconfig.json package.json index.html"
+  },
+  "dependencies": {
+    "@arco-design/web-vue": "^2.58.0",
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.0",
+    "openapi-typescript": "^7.10.0",
+    "prettier": "^3.9.9",
+    "typescript": "~5.8.0",
+    "vite": "^6.3.0",
+    "vue-tsc": "^3.3.14"
+  }
+}

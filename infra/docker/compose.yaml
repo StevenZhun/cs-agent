@@ -1,0 +1,258 @@
+name: cs-agent
+
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  postgres:
+    restart: unless-stopped
+    logging: *default-logging
+    image: ${POSTGRES_IMAGE:-postgres:16.14-alpine3.24}
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-cs_agent}
+      POSTGRES_USER: ${POSTGRES_USER:-cs_agent}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in root .env}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  redis:
+    restart: unless-stopped
+    logging: *default-logging
+    image: ${REDIS_IMAGE:-redis:7.2.14-bookworm}
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  etcd:
+    restart: unless-stopped
+    logging: *default-logging
+    image: ${ETCD_IMAGE:-quay.io/coreos/etcd:v3.5.25}
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: "1000"
+      ETCD_QUOTA_BACKEND_BYTES: "4294967296"
+      ETCD_SNAPSHOT_COUNT: "50000"
+    command:
+      - etcd
+      - --advertise-client-urls=http://etcd:2379
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --data-dir=/etcd
+    volumes:
+      - etcd_data:/etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  minio:
+    restart: unless-stopped
+    logging: *default-logging
+    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2024-12-18T13-15-44Z}
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in root .env}
+    command: ["minio", "server", "/minio_data", "--console-address", ":9001"]
+    ports:
+      - "127.0.0.1:${MINIO_API_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/minio_data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  milvus:
+    restart: unless-stopped
+    logging: *default-logging
+    image: ${MILVUS_IMAGE:-milvusdb/milvus:v2.6.7}
+    command: ["milvus", "run", "standalone"]
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+      MINIO_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in root .env}
+      MQ_TYPE: woodpecker
+    ports:
+      - "127.0.0.1:${MILVUS_PORT:-19530}:19530"
+      - "127.0.0.1:${MILVUS_WEB_PORT:-9091}:9091"
+    volumes:
+      - milvus_data:/var/lib/milvus
+      - ./milvus/user.yaml:/milvus/configs/user.yaml:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9091/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 90s
+    depends_on:
+      etcd:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  nginx:
+    restart: unless-stopped
+    logging: *default-logging
+    profiles: ["app"]
+    image: ${NGINX_IMAGE:-nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10}
+    ports:
+      - "127.0.0.1:${NGINX_HTTP_PORT:-8080}:80"
+      - "127.0.0.1:${NGINX_HTTPS_PORT:-8443}:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../../frontend/workbench/dist:/usr/share/nginx/html:ro
+      - ../../.runtime/tls:/etc/nginx/tls:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    depends_on:
+      bff:
+        condition: service_healthy
+
+  customer-data:
+    restart: unless-stopped
+    logging: *default-logging
+    profiles: ["app"]
+    image: cs-agent-api:latest
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    command: ["services.customer_data.app:app", "--host", "0.0.0.0", "--port", "8002"]
+    env_file:
+      - ../../.env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-cs_agent}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cs_agent}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/health/ready', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  ai-runtime:
+    restart: unless-stopped
+    logging: *default-logging
+    profiles: ["app"]
+    image: cs-agent-api:latest
+    command: ["services.ai_runtime.app:app", "--host", "0.0.0.0", "--port", "8001"]
+    env_file:
+      - ../../.env
+    environment:
+      CUSTOMER_DATA_URL: http://customer-data:8002
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-cs_agent}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cs_agent}
+      REDIS_URL: redis://redis:6379/0
+      MILVUS_URI: http://milvus:19530
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health/ready', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      milvus:
+        condition: service_healthy
+      customer-data:
+        condition: service_healthy
+
+  bff:
+    restart: unless-stopped
+    logging: *default-logging
+    profiles: ["app"]
+    image: cs-agent-api:latest
+    command: ["services.bff.app:app", "--host", "0.0.0.0", "--port", "8000"]
+    env_file:
+      - ../../.env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-cs_agent}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cs_agent}
+      CUSTOMER_DATA_URL: http://customer-data:8002
+      AI_RUNTIME_URL: http://ai-runtime:8001
+      REDIS_URL: redis://redis:6379/0
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    depends_on:
+      customer-data:
+        condition: service_healthy
+      ai-runtime:
+        condition: service_healthy
+
+  bff-recovery:
+    restart: unless-stopped
+    logging: *default-logging
+    profiles: ["app"]
+    image: cs-agent-api:latest
+    # 后台恢复者不提供 HTTP 端口，不能继承共享镜像中的 Web 健康检查。
+    healthcheck:
+      disable: true
+    entrypoint: ["/app/.venv/bin/python"]
+    command: ["-m", "services.bff.recovery"]
+    env_file:
+      - ../../.env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-cs_agent}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cs_agent}
+      AI_RUNTIME_URL: http://ai-runtime:8001
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      ai-runtime:
+        condition: service_healthy
+
+  quality:
+    restart: unless-stopped
+    logging: *default-logging
+    profiles: ["app"]
+    image: cs-agent-api:latest
+    command: ["services.quality.app:app", "--host", "0.0.0.0", "--port", "8003"]
+    env_file:
+      - ../../.env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-cs_agent}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cs_agent}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8003/health/ready', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    depends_on:
+      postgres:
+        condition: service_healthy
+      bff:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+  etcd_data:
+  minio_data:
+  milvus_data:
